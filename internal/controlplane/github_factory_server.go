@@ -174,6 +174,7 @@ func (s *GitHubFactoryServer) routes() (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/status", s.status)
+	mux.HandleFunc("GET /api/v1/models", s.models)
 	mux.HandleFunc("GET /api/v1/onboarding", s.onboardingStatus)
 	mux.HandleFunc("GET /api/v1/onboarding/repositories", s.onboardingRepositories)
 	mux.HandleFunc("GET /api/v1/onboarding/worker-config", s.onboardingWorkerConfig)

@@ -15,7 +15,9 @@ for (const agent of ["codex", "opencode", "hermes"]) test(`project composer keep
  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
  const status = {state_backend:"local",csrf_token:"csrf",jobs:[],workers:[],commands:[],workflows:["factory"],repositories:["owner/first","owner/second"],onboarding:{required:false,selection:{host:"local",agent},project_defaults:{"owner/second":{recipe:legacySupported ? "single" : "factory",instructions:"Test this project"}}}};
  let submitted;
+ const availableModels = [{id: "provider/model-a", label: "Model A"}, {id: "provider/model-b", label: "Model B"}];
  globalThis.fetch = async (url, options) => {
+  if (url === "/api/v1/models") return {ok:true,json:async()=>({agent,models:availableModels})};
   if (url === "/api/v1/jobs") { submitted = JSON.parse(options.body); return {ok:true,json:async()=>({id:"new-job"})}; }
   return {ok:true,json:async()=>status};
  };
@@ -32,10 +34,11 @@ for (const agent of ["codex", "opencode", "hermes"]) test(`project composer keep
  assert.equal(selects[1].querySelector('option[value="factory"]').disabled, !legacySupported);
  assert.equal(selects[1].querySelector('option[value="single"]').disabled, false);
  assert.equal(selects[1].querySelector('option[value="native-v1"]').disabled, false);
- const model = composer.querySelector('input[placeholder="Agent default"]');
- assert.ok(model, "task submissions expose a model choice");
+ const model = composer.querySelector('select[aria-label="Model"]');
+ assert.ok(model, "task submissions expose a model picker");
  assert.equal(model.value, "");
- assert.equal(model.maxLength, 128);
+ assert.deepEqual([...model.options].map(option => option.value), ["", "provider/model-a", "provider/model-b"]);
+ assert.equal(model.options[0].textContent, "Agent default");
  for (const mode of legacySupported ? ["native-v1", "single", "factory"] : ["native-v1", "single"]) {
   await act(()=>{selects[1].value=mode;selects[1].dispatchEvent(new dom.window.Event("change",{bubbles:true}));});
   assert.ok(composer.contains(model), `model selection remains available in ${mode}`);
@@ -48,13 +51,13 @@ for (const agent of ["codex", "opencode", "hermes"]) test(`project composer keep
  }
  await act(()=>{selects[1].value=legacySupported ? "factory" : "";selects[1].dispatchEvent(new dom.window.Event("change",{bubbles:true}));fill(areas[0],"Implement the change");fill(areas[1],"");});
  await act(()=>{
-  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,"value").set.call(model," provider/chosen-model ");
-  model.dispatchEvent(new dom.window.Event("input",{bubbles:true}));
+  model.value="provider/model-b";
+  model.dispatchEvent(new dom.window.Event("change",{bubbles:true}));
  });
  await act(()=>composer.querySelector("form").dispatchEvent(new dom.window.Event("submit",{bubbles:true,cancelable:true})));
  assert.equal(submitted.repository,"owner/second");
  assert.equal(submitted.recipe,legacySupported ? "factory" : "native-v1");
- assert.equal(submitted.model,"provider/chosen-model");
+ assert.equal(submitted.model,"provider/model-b");
  assert.equal(submitted.project_instructions,"");
  assert.equal(submitted.spec,"Implement the change");
 });
