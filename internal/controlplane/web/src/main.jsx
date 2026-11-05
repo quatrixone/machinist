@@ -40,10 +40,11 @@ function App() {
   const [filter, setFilter] = useState("all");
   const [recipe, setRecipe] = useState("");
  const executionHost=status.onboarding?.selection?.host;
+ const legacySupported=!["opencode", "hermes"].includes(status.onboarding?.selection?.agent);
  const [projectInstructions, setProjectInstructions] = useState(null);
  useEffect(()=>{setRecipe(""); setProjectInstructions(null);},[repository]);
  const projectDefaults = status.onboarding?.project_defaults?.[repository] || {};
- const defaultRecipe = projectDefaults.recipe || (executionHost === "kubernetes" ? "single" : "native-v1");
+ const defaultRecipe = (projectDefaults.recipe === "factory" && !legacySupported ? "" : projectDefaults.recipe) || (executionHost === "kubernetes" ? "single" : "native-v1");
   const submission = useRef(null);
   const [dark, setDark] = useState(() => localStorage.getItem("machinist-theme") !== "light");
   const [route, setRoute] = useState(() => routeFromHash(window.location.hash));
@@ -219,7 +220,7 @@ function App() {
             </div>
           </PageHeading>
 
-          {composerOpen && <RunComposer defaultRecipe={defaultRecipe} projectInstructions={projectInstructions ?? projectDefaults.instructions ?? ""} setProjectInstructions={setProjectInstructions} nativeSupported={executionHost!=="kubernetes"} recipe={recipe} setRecipe={setRecipe} stateBackend={status.state_backend} choices={choices} repositories={repositories} selection={selection} setSelection={setSelection} repository={repository} setRepository={setRepository} prompt={prompt} setPrompt={setPrompt} model={model} setModel={setModel} submitting={submitting} submit={submit} close={() => setComposerOpen(false)} />}
+          {composerOpen && <RunComposer legacySupported={legacySupported} defaultRecipe={defaultRecipe} projectInstructions={projectInstructions ?? projectDefaults.instructions ?? ""} setProjectInstructions={setProjectInstructions} nativeSupported={executionHost!=="kubernetes"} recipe={recipe} setRecipe={setRecipe} stateBackend={status.state_backend} choices={choices} repositories={repositories} selection={selection} setSelection={setSelection} repository={repository} setRepository={setRepository} prompt={prompt} setPrompt={setPrompt} model={model} setModel={setModel} submitting={submitting} submit={submit} close={() => setComposerOpen(false)} />}
           {(statusError || submitError) && <div role="alert" className="rounded-md border border-danger/35 bg-danger/10 px-3 py-2 text-sm text-danger">{submitError || statusError}</div>}
 
           <section>
@@ -246,7 +247,7 @@ function App() {
   );
 }
 
-function RunComposer({ defaultRecipe,projectInstructions,setProjectInstructions,nativeSupported=true,recipe,setRecipe,stateBackend,choices,repositories,selection,repository,setRepository,prompt,setPrompt,model,setModel,submitting,submit,close }) {
+function RunComposer({ legacySupported=true,defaultRecipe,projectInstructions,setProjectInstructions,nativeSupported=true,recipe,setRecipe,stateBackend,choices,repositories,selection,repository,setRepository,prompt,setPrompt,model,setModel,submitting,submit,close }) {
   const hintID=React.useId();
   const taskMode=["local", "github"].includes(stateBackend);
   return <Card className="run-composer">
@@ -254,8 +255,8 @@ function RunComposer({ defaultRecipe,projectInstructions,setProjectInstructions,
     <form onSubmit={submit} className="composer-form">
       <label><span className="field-label">What do you want done?</span><textarea autoFocus aria-describedby={hintID} className="field-control composer-prompt" value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe a task or paste a GitHub issue link…" required /></label>
       <div className="composer-options"><label><span className="field-label">Repository</span><select className="field-control" value={repository} onChange={e=>setRepository(e.target.value)} required>{!repositories.length && <option value="">No repositories available</option>}{repositories.map(r=><option key={r} value={r}>{r}</option>)}</select></label>
-      {taskMode && <label><span className="field-label">Run mode</span><select className="field-control" value={recipe} onChange={event => setRecipe(event.target.value)}><option value="">Project default ({defaultRecipe === "native-v1" ? "Native agents" : defaultRecipe === "single" ? "Single agent" : "Legacy pipeline"})</option><option value="native-v1" disabled={!nativeSupported}>Native agents</option><option value="factory">Legacy pipeline</option><option value="single">Single agent</option></select></label>}
-      {!taskMode && <label><span className="field-label">Model override</span><input className="field-control" value={model} onChange={e=>setModel(e.target.value)} maxLength={128} placeholder="Agent default" /></label>}</div>
+      {taskMode && <label><span className="field-label">Run mode</span><select className="field-control" value={recipe} onChange={event => setRecipe(event.target.value)}><option value="">Project default ({defaultRecipe === "native-v1" ? "Native agents" : defaultRecipe === "single" ? "Single agent" : "Legacy pipeline"})</option><option value="native-v1" disabled={!nativeSupported}>Native agents</option><option value="factory" disabled={!legacySupported}>Legacy pipeline</option><option value="single">Single agent</option></select></label>}
+      <label><span className="field-label">Model</span><input className="field-control" value={model} onChange={e=>setModel(e.target.value)} maxLength={128} placeholder="Agent default" /></label></div>
       {taskMode && <label><span className="field-label">Project instructions for this job</span><textarea className="field-control" maxLength={2000} value={projectInstructions} onChange={event => setProjectInstructions(event.target.value)} /><small>Included in the submitted prompt. Edit or clear for this job.</small></label>}
       <p id={hintID} className="composer-hint">{!taskMode ? "Uses the configured agent and execution target." : (recipe || defaultRecipe) === "native-v1" ? "One primary run with native child agents. You decide when to merge." : (recipe || defaultRecipe) === "single" ? "One agent completes the task. No separate review." : "Triage → optional Spec → Build → Review. You decide when to merge."}</p>
       {!choices.length && <p role="alert" className="text-sm text-danger">Complete setup before starting a run.</p>}

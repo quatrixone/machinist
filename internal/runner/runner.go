@@ -162,7 +162,7 @@ func Execute(ctx context.Context, options Options) (result Result, returnErr err
 		return result, &RuntimeError{Cause: err}
 	}
 	executorCommand := structuredCommand(options.Command.Executor, options.Command.Command)
-	native := options.Command.Adapter == "claude-stream" || options.Command.Adapter == "codex-app-server"
+	native := options.Command.Adapter == "claude-stream" || options.Command.Adapter == "codex-app-server" || options.Command.Adapter == "opencode-json" || options.Command.Adapter == "hermes-stream"
 	if native {
 		executorCommand, err = nativeCommand(options.Command, options.Factory != nil && options.Factory.Recipe == "native-v1")
 		if err != nil {
@@ -229,7 +229,7 @@ func Execute(ctx context.Context, options Options) (result Result, returnErr err
 	command := exec.Command(executorCommand[0], executorCommand[1:]...)
 	command.Dir = repository
 	command.Env = append(mergeEnvironment(sanitizedEnvironment(os.Environ()), options.Environment), "MACHINIST_RUN_ID="+runID, "MACHINIST_REPOSITORY="+repository, tokenUsageEnvironment+"="+tokenUsagePath)
-	if native {
+	if options.Command.Adapter == "claude-stream" || options.Command.Adapter == "codex-app-server" {
 		command.Env = nativeEnvironment(command.Env)
 	}
 	if options.Revision != nil {
@@ -396,7 +396,7 @@ func Execute(ctx context.Context, options Options) (result Result, returnErr err
 	}
 	if nativeOutput != nil {
 		result.FinalMessage = nativeOutput.lastMessage()
-		if options.Command.Adapter == "codex-app-server" {
+		if options.Command.Adapter != "claude-stream" {
 			collectedTokenUsage = nativeOutput.usage
 			collectedTokenUsageIsAuthoritative = true
 		}

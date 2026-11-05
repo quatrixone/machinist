@@ -22,7 +22,7 @@ func nativeProvenance(directory, repository string, command config.ResolvedComma
 		SHA256 string `json:"sha256"`
 	}
 	files := []file{}
-	for _, pattern := range []string{".claude/agents/*.md", ".codex/agents/*.toml", ".claude/settings.json", ".codex/config.toml", "AGENTS.md", "CLAUDE.md"} {
+	for _, pattern := range []string{".claude/agents/*.md", ".codex/agents/*.toml", ".claude/settings.json", ".codex/config.toml", "AGENTS.md", "CLAUDE.md", ".opencode/agents/*.md", "opencode.json", "opencode.jsonc", "SOUL.md"} {
 		paths, err := filepath.Glob(filepath.Join(repository, pattern))
 		if err != nil {
 			return err
