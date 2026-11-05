@@ -220,7 +220,7 @@ function App() {
             </div>
           </PageHeading>
 
-          {composerOpen && <RunComposer legacySupported={legacySupported} defaultRecipe={defaultRecipe} projectInstructions={projectInstructions ?? projectDefaults.instructions ?? ""} setProjectInstructions={setProjectInstructions} nativeSupported={executionHost!=="kubernetes"} recipe={recipe} setRecipe={setRecipe} stateBackend={status.state_backend} choices={choices} repositories={repositories} selection={selection} setSelection={setSelection} repository={repository} setRepository={setRepository} prompt={prompt} setPrompt={setPrompt} model={model} setModel={setModel} submitting={submitting} submit={submit} close={() => setComposerOpen(false)} />}
+          {composerOpen && <RunComposer legacySupported={legacySupported} defaultRecipe={defaultRecipe} projectInstructions={projectInstructions ?? projectDefaults.instructions ?? ""} setProjectInstructions={setProjectInstructions} nativeSupported={executionHost!=="kubernetes"} recipe={recipe} setRecipe={setRecipe} stateBackend={status.state_backend} choices={choices} repositories={repositories} selection={selection} setSelection={setSelection} repository={repository} setRepository={setRepository} prompt={prompt} setPrompt={setPrompt} model={model} setModel={setModel} submitting={submitting} submit={submit} close={() => setComposerOpen(false)} modelEndpoint="/api/v1/models" />}
           {(statusError || submitError) && <div role="alert" className="rounded-md border border-danger/35 bg-danger/10 px-3 py-2 text-sm text-danger">{submitError || statusError}</div>}
 
           <section>
@@ -247,14 +247,14 @@ function App() {
   );
 }
 
-function RunComposer({ legacySupported=true,defaultRecipe,projectInstructions,setProjectInstructions,nativeSupported=true,recipe,setRecipe,stateBackend,choices,repositories,selection,repository,setRepository,prompt,setPrompt,model,setModel,submitting,submit,close }) {
+function RunComposer({ legacySupported=true,defaultRecipe,projectInstructions,setProjectInstructions,nativeSupported=true,recipe,setRecipe,stateBackend,choices,repositories,selection,repository,setRepository,prompt,setPrompt,model,setModel,submitting,submit,close,modelEndpoint="/api/v1/models" }) {
   const hintID=React.useId();
   const [models, setModels] = useState([]);
   const [modelsError, setModelsError] = useState("");
   const taskMode=["local", "github"].includes(stateBackend);
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/v1/models", { headers: { Accept: "application/json" }, signal: controller.signal })
+    fetch(modelEndpoint, { headers: { Accept: "application/json" }, signal: controller.signal })
       .then(async response => {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || `Unable to load models (${response.status})`);
@@ -262,17 +262,17 @@ function RunComposer({ legacySupported=true,defaultRecipe,projectInstructions,se
         setModelsError("");
       })
       .catch(error => {
-        if (error.name !== "AbortError") setModelsError("Model list unavailable; agent default remains available.");
+        if (error.name !== "AbortError") setModelsError("Model suggestions unavailable; enter a model ID manually.");
       });
     return () => controller.abort();
-  }, []);
+  }, [modelEndpoint]);
   return <Card className="run-composer">
     <header className="composer-heading"><h2>New run</h2><Button variant="ghost" size="icon" onClick={close} aria-label="Close new run form"><X className="size-4" /></Button></header>
     <form onSubmit={submit} className="composer-form">
       <label><span className="field-label">What do you want done?</span><textarea autoFocus aria-describedby={hintID} className="field-control composer-prompt" value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe a task or paste a GitHub issue link…" required /></label>
       <div className="composer-options"><label><span className="field-label">Repository</span><select className="field-control" value={repository} onChange={e=>setRepository(e.target.value)} required>{!repositories.length && <option value="">No repositories available</option>}{repositories.map(r=><option key={r} value={r}>{r}</option>)}</select></label>
       {taskMode && <label><span className="field-label">Run mode</span><select className="field-control" value={recipe} onChange={event => setRecipe(event.target.value)}><option value="">Project default ({defaultRecipe === "native-v1" ? "Native agents" : defaultRecipe === "single" ? "Single agent" : "Legacy pipeline"})</option><option value="native-v1" disabled={!nativeSupported}>Native agents</option><option value="factory" disabled={!legacySupported}>Legacy pipeline</option><option value="single">Single agent</option></select></label>}
-      <label><span className="field-label">Model</span><select aria-label="Model" className="field-control" value={model} onChange={event => setModel(event.target.value)}><option value="">Agent default</option>{models.map(option => <option key={option.id} value={option.id}>{option.label || option.id}</option>)}</select>{modelsError && <small role="status">{modelsError}</small>}</label></div>
+      <label><span className="field-label">Model</span><input aria-label="Model" className="field-control" list={`${hintID}-models`} value={model} onChange={event => setModel(event.target.value)} maxLength={128} placeholder="Agent default" /><datalist id={`${hintID}-models`}>{models.map(option => <option key={option.id} value={option.id} label={option.label || option.id} />)}</datalist>{modelsError && <small role="status">Model suggestions unavailable; enter a model ID manually.</small>}</label></div>
       {taskMode && <label><span className="field-label">Project instructions for this job</span><textarea className="field-control" maxLength={2000} value={projectInstructions} onChange={event => setProjectInstructions(event.target.value)} /><small>Included in the submitted prompt. Edit or clear for this job.</small></label>}
       <p id={hintID} className="composer-hint">{!taskMode ? "Uses the configured agent and execution target." : (recipe || defaultRecipe) === "native-v1" ? "One primary run with native child agents. You decide when to merge." : (recipe || defaultRecipe) === "single" ? "One agent completes the task. No separate review." : "Triage → optional Spec → Build → Review. You decide when to merge."}</p>
       {!choices.length && <p role="alert" className="text-sm text-danger">Complete setup before starting a run.</p>}

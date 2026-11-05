@@ -73,7 +73,7 @@ func TestWorkflowHTTPSubmissionAndApproval(t *testing.T) {
 		t.Fatalf("approval %d", response.StatusCode)
 	}
 	response.Body.Close()
-	response = postJSON(t, web.URL+"/api/v1/workers/poll", protocol.PollRequest{InstanceID: "worker-a", Name: "host", Executors: []string{"test"}, Repositories: []string{"machinist"}, Workflows: true, Artifacts: true, SharedOutputs: true}, map[string]string{"Authorization": "Bearer secret"})
+	response = postJSON(t, web.URL+"/api/v1/workers/poll", protocol.PollRequest{InstanceID: "worker-a", Name: "host", Executors: []string{"test"}, Repositories: []string{"machinist"}, Models: map[string][]string{"test": {"test/default"}}, Workflows: true, Artifacts: true, SharedOutputs: true}, map[string]string{"Authorization": "Bearer secret"})
 	defer response.Body.Close()
 	var polled protocol.PollResponse
 	if err = json.NewDecoder(response.Body).Decode(&polled); err != nil {

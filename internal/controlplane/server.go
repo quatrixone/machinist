@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -281,6 +282,7 @@ func (s *Server) routes() (http.Handler, error) {
 	mux.HandleFunc("GET /api/v1/jobs/{id}/artifacts", s.authorizeArtifact(s.listArtifacts))
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/content", s.authorizeArtifact(s.artifactContent))
 	mux.HandleFunc("GET /api/v1/status", s.status)
+	mux.HandleFunc("GET /api/v1/models", s.models)
 	mux.HandleFunc("GET /api/v1/catalog", s.catalog)
 	mux.HandleFunc("GET /api/v1/definitions", s.definitions)
 	mux.HandleFunc("POST /api/v1/jobs/{id}/{action}", s.authorizeSubmission(s.workflowAction))
@@ -291,6 +293,36 @@ func (s *Server) routes() (http.Handler, error) {
 	mux.HandleFunc("POST /api/v1/runs/{id}/complete", s.authorizeWorker(s.complete))
 	mux.Handle("/", http.FileServer(http.FS(dist)))
 	return securityHeaders(mux), nil
+}
+
+func (s *Server) models(response http.ResponseWriter, request *http.Request) {
+	definition, err := config.LoadDefinitions(s.definitionPath)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, err)
+		return
+	}
+	choices := []ModelChoice{}
+	seen := map[string]bool{}
+	add := func(model string) {
+		model = strings.TrimSpace(model)
+		if model == "" || len(model) > maxModelIDLength || strings.ContainsAny(model, "\x00\r\n") || seen[model] {
+			return
+		}
+		seen[model] = true
+		choices = append(choices, ModelChoice{ID: model, Label: model})
+	}
+	for _, commandName := range definition.CommandNames() {
+		command, resolveErr := definition.ResolveCommand(commandName)
+		if resolveErr == nil && command.Model != "" {
+			add(command.Model)
+		}
+	}
+	sort.Slice(choices, func(i, j int) bool { return choices[i].ID < choices[j].ID })
+	if choices == nil {
+		choices = []ModelChoice{}
+	}
+	response.Header().Set("Cache-Control", "no-store")
+	writeJSON(response, http.StatusOK, modelChoicesResponse{Agent: "configured", Models: choices})
 }
 
 func (s *Server) definitions(response http.ResponseWriter, request *http.Request) {

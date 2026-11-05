@@ -27,6 +27,22 @@ func TestServerProtectsSubmissionAndWorkerAPIs(t *testing.T) {
 	if status.CSRFToken == "" || len(status.Commands) != 1 || status.Commands[0] != "plan" {
 		t.Fatalf("status = %#v", status)
 	}
+	modelsResponse, err := http.Get(webServer.URL + "/api/v1/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if modelsResponse.StatusCode != http.StatusOK {
+		t.Fatalf("models status = %d", modelsResponse.StatusCode)
+	}
+	var models modelChoicesResponse
+	if err = json.NewDecoder(modelsResponse.Body).Decode(&models); err != nil {
+		modelsResponse.Body.Close()
+		t.Fatal(err)
+	}
+	modelsResponse.Body.Close()
+	if models.Agent != "configured" || len(models.Models) != 1 || models.Models[0].ID != "test/default" {
+		t.Fatalf("models = %+v", models)
+	}
 	workerPoll := postJSON(t, webServer.URL+"/api/v1/workers/poll", map[string]any{"instance_id": "worker-a", "name": "test-worker", "executors": []string{"test"}, "repositories": []string{"machinist"}}, map[string]string{"Authorization": "Bearer secret"})
 	if workerPoll.StatusCode != http.StatusOK {
 		t.Fatalf("worker poll status = %d", workerPoll.StatusCode)
@@ -800,7 +816,7 @@ func newTestHTTPServerWithLimit(t *testing.T, maxConcurrentJobs int) (*Server, *
 		t.Fatal(err)
 	}
 	definitionPath := filepath.Join(directory, "config.toml")
-	if err := os.WriteFile(definitionPath, []byte("[commands.plan]\nexecutor = \"test\"\nprompt_file = \"plan.md\"\ntimeout = \"1m\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(definitionPath, []byte("[commands.plan]\nexecutor = \"test\"\nprompt_file = \"plan.md\"\ntimeout = \"1m\"\nmodel = \"test/default\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := openTestStore(t, filepath.Join(directory, "machinist.db"))

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"os/exec"
@@ -59,9 +60,13 @@ func (s *GitHubFactoryServer) models(w http.ResponseWriter, r *http.Request) {
 
 func listOpenCodeModels(ctx context.Context) ([]ModelChoice, error) {
 	command := exec.CommandContext(ctx, "opencode", "models")
+	command.WaitDelay = 250 * time.Millisecond
 	output, err := command.Output()
 	if err != nil {
 		return nil, err
+	}
+	if len(output) > 1<<20 {
+		return nil, errors.New("OpenCode model list exceeds 1 MiB")
 	}
 	return parseOpenCodeModelsOutput(string(output)), nil
 }
@@ -105,7 +110,7 @@ func readCodexModels(home string) ([]ModelChoice, error) {
 	choices := make([]ModelChoice, 0, len(cache.Models))
 	seen := map[string]bool{}
 	for _, model := range cache.Models {
-		if model.Slug == "" || len(model.Slug) > maxModelIDLength || model.Visibility != "list" || model.SupportedInAPI != true || seen[model.Slug] {
+		if model.Slug == "" || len(model.Slug) > maxModelIDLength || strings.ContainsAny(model.Slug, "\x00\r\n") || model.Visibility != "list" || model.SupportedInAPI != true || seen[model.Slug] {
 			continue
 		}
 		seen[model.Slug] = true
