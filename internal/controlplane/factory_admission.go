@@ -133,7 +133,7 @@ func (s *GitHubFactoryServer) workerSupports(ctx context.Context, task *githubTa
 		if err != nil {
 			return false
 		}
-		if job.Recipe == "native-v1" && p.Adapters[command.Executor] != "claude-stream" && p.Adapters[command.Executor] != "codex-app-server" {
+		if job.Recipe == "native-v1" && p.Adapters[command.Executor] != "claude-stream" && p.Adapters[command.Executor] != "codex-app-server" && p.Adapters[command.Executor] != "opencode-json" && p.Adapters[command.Executor] != "hermes-stream" {
 			return false
 		}
 		if !executors[command.Executor] || !supportsModel(p.Models, command.Executor, command.Model) || ((stage == "review" || stage == "triage" || job.Recipe == "answer") && !readonly[command.Executor]) {

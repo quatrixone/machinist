@@ -107,6 +107,7 @@ func ReduceGitHubFactory(issue GitHubIssue, comments []GitHubComment, actor, rep
 			s.LastEventID = comment.ID
 			s.FixedRecipe = event.Recipe != ""
 			s.Job.Recipe = recipe
+			s.Job.Model = event.Model
 			s.Job.Workflow.Name = recipe
 			if recipe == "direct" || recipe == "single" {
 				s.Job.Workflow.Steps = []string{"implement", "review"}

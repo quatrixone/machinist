@@ -1,5 +1,29 @@
 # Native agent runs
 
+## Local OpenCode and Hermes
+
+On **This computer**, setup also detects OpenCode (`opencode`) and Hermes
+(`hermes`). Install the CLI, configure its provider and credentials, then select
+it and run the connection check. These agents use the native run contract;
+they do not advertise the read-only executors required by legacy review stages.
+Remote VM and Kubernetes setup remain limited to Codex and Claude Code.
+
+Machinist sends the rendered prompt over stdin to `opencode run --format json`
+or `hermes chat --query-file - --format stream-json`. The CLI keeps its existing
+provider configuration and credentials. Model overrides are passed as a separate
+`--model` argument: use OpenCode's `provider/model` identifier or a Hermes model
+identifier supported by the configured provider. Leaving the model empty keeps
+the CLI default; an override does not change that saved default.
+
+Primary completion, final text, errors and token usage come from structured
+output. Child activity remains in raw output until those CLIs provide a supported
+child lifecycle contract. The existing process cleanup and delivery checks still
+apply. The local CLI runs with the host account's permissions and its own tool
+permission configuration.
+
+CLI references: [OpenCode](https://opencode.ai/docs/cli/),
+[Hermes](https://hermes-agent.nousresearch.com/docs/reference/cli-commands/).
+
 New runs in the web UI use `native-v1`: one primary run owns all observed child activity. The harness discovers repository definitions in the task worktree:
 
 - Claude Code: `.claude/agents/*.md`.
@@ -7,9 +31,9 @@ New runs in the web UI use `native-v1`: one primary run owns all observed child 
 
 The Agents page shows the configured primary prompt template, model choice, and native definitions for the selected local repository. Model inheritance is explicit. Built-in and plugin-provided agents are managed by the harness; remote repository definitions are reported as unavailable rather than inferred from a local checkout. This view is read-only and has a Refresh action.
 
-Commit those files to the repository. Machinist does not translate or copy agent definitions. The primary instructions come from `commands.primary.prompt_file` in the server config. The example config and `machinist init` include this command. Set its executor to `codex-native` or `claude-native`. Set a model only when it is available to the signed-in account. Codex checks `account/read` and `model/list` before starting a primary thread; the service can still reject a listed model at turn start.
+Commit those files to the repository. Machinist does not translate or copy agent definitions. The primary instructions come from `commands.primary.prompt_file` in the server config. The example config and `machinist init` include this command. Set its executor to `codex-native`, `claude-native`, `opencode-native`, or `hermes-native`, matching the configured worker executor. Set a model only when it is available to the signed-in account. Codex checks `account/read` and `model/list` before starting a primary thread; the service can still reject a listed model at turn start.
 
-Host workers use existing CLI subscription sign-in. Native adapters remove inherited desktop routing variables and API-token variables from the child environment. Codex requires a ChatGPT account; Claude rejects an explicit API key source. This is a personal host integration, not approval for hosted commercial subscription use.
+Codex and Claude host workers use existing CLI subscription sign-in. Their native adapters remove inherited desktop routing variables and API-token variables from the child environment. Codex requires a ChatGPT account; Claude rejects an explicit API key source. This is a personal host integration, not approval for hosted commercial subscription use.
 
 `codex-app-server` owns one stdio JSON-RPC process per run. The configurable command must launch `codex app-server`; model selection travels in `thread/start`. The worker authorizes the assigned repository. Codex must already trust its main repository path in the CLI configuration. A linked worktree inherits trust from that Git common repository root. The adapter rejects project-configuration-disabled warnings instead of silently running without repository agents. Register only repositories whose configuration you trust. CLI sandbox settings and permissions remain in the configured command. `claude-stream` requires Claude print mode with `stream-json`; it must not use `--bare`, which disables subscription authentication. Ordinary process commands and existing CLI exec workflows still work.
 

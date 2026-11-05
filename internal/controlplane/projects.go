@@ -186,6 +186,9 @@ func validateProjectDefaults(defaults projectDefaults, selection setupSelection)
 	default:
 		return errors.New("unsupported default run mode")
 	}
+	if (selection.Agent == "opencode" || selection.Agent == "hermes") && defaults.Recipe == "factory" {
+		return errors.New("OpenCode and Hermes require native agents or single agent mode; the legacy pipeline requires a read-only review executor")
+	}
 	if selection.Host == "kubernetes" && defaults.Recipe == "native-v1" {
 		return errors.New("Kubernetes requires the pipeline or single agent mode")
 	}

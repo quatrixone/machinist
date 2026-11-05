@@ -529,8 +529,12 @@ func (s *GitHubFactoryServer) submit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, errors.New("configure the repository's GitHub mapping first"))
 		return
 	}
-	if (input.Workflow != "" && input.Workflow != "factory") || input.Command != "" || input.Model != "" {
-		writeError(w, 400, errors.New("choose a recipe; executors and models use the configured agent profile"))
+	if (input.Workflow != "" && input.Workflow != "factory") || input.Command != "" {
+		writeError(w, 400, errors.New("choose a recipe; executors use the configured agent profile"))
+		return
+	}
+	if len(input.Model) > 128 || strings.TrimSpace(input.Model) != input.Model || strings.ContainsAny(input.Model, "\x00\r\n") {
+		writeError(w, 400, errors.New("invalid model; use at most 128 characters without surrounding whitespace or line breaks"))
 		return
 	}
 	if len(input.ClientRequestID) > 128 || strings.TrimSpace(input.ClientRequestID) != input.ClientRequestID {
@@ -585,6 +589,9 @@ func (s *GitHubFactoryServer) submit(w http.ResponseWriter, r *http.Request) {
 	recipe := defaults.Recipe
 	if recipe == "" {
 		recipe = "factory"
+		if selection.Agent == "opencode" || selection.Agent == "hermes" {
+			recipe = "native-v1"
+		}
 	}
 	if recipe != "factory" && recipe != "single" && recipe != "native-v1" {
 		writeError(w, 400, errors.New("choose the standard factory pipeline or single agent"))
@@ -682,12 +689,16 @@ func (s *GitHubFactoryServer) submit(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 409, reduceErr)
 			return
 		}
+		if current.Job.Model != input.Model {
+			writeError(w, 409, errors.New("linked issue already has a job with a different model"))
+			return
+		}
 		if current.Job.Recipe != recipe {
 			writeError(w, 409, errors.New("linked issue already has a job with a different recipe"))
 			return
 		}
 	}
-	if err = s.local.createRequest(r.Context(), localFactoryTask{issue: issue, repository: repo, alias: input.Repository, projectInstructions: defaults.Instructions}, input.ClientRequestID, fingerprint, recipe); err != nil {
+	if err = s.local.createRequest(r.Context(), localFactoryTask{issue: issue, repository: repo, alias: input.Repository, projectInstructions: defaults.Instructions, model: input.Model}, input.ClientRequestID, fingerprint, recipe); err != nil {
 		writeError(w, 500, err)
 		return
 	}
@@ -1293,6 +1304,9 @@ func (s *GitHubFactoryServer) jobCommand(ctx context.Context, task *githubTask, 
 				command.Model = ""
 			}
 		}
+		if task != nil && task.state != nil && task.state.Job.Model != "" {
+			command.Model = task.state.Job.Model
+		}
 		return command, err
 	}
 
@@ -1309,6 +1323,9 @@ func (s *GitHubFactoryServer) jobCommand(ctx context.Context, task *githubTask, 
 		}
 		sum := sha256.Sum256([]byte(command.Prompt))
 		command.Hash = hex.EncodeToString(sum[:])
+	}
+	if task != nil && task.state != nil && task.state.Job.Model != "" {
+		command.Model = task.state.Job.Model
 	}
 	return command, err
 }

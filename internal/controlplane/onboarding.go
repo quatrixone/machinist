@@ -164,17 +164,14 @@ func (o *onboarding) status(ctx context.Context) (map[string]any, error) {
 	base := o.baseURL
 	o.mu.Unlock()
 	agents := []map[string]any{}
-	for _, name := range []string{"codex", "claude"} {
+	for _, name := range []string{"codex", "claude", "opencode", "hermes"} {
 		_, err := exec.LookPath(name)
-		label := "Codex"
-		if name == "claude" {
-			label = "Claude Code"
-		}
+		label := map[string]string{"codex": "Codex", "claude": "Claude Code", "opencode": "OpenCode", "hermes": "Hermes"}[name]
 		agents = append(agents, map[string]any{"id": name, "name": label, "available": err == nil})
 	}
 	worker := map[string]any{"connected": false, "config_url": "/api/v1/onboarding/worker-config?host=remote", "command": "sh machinist-worker-setup.sh"}
 	for _, w := range o.server.liveWorkers() {
-		if time.Since(w.LastSeenAt) < workerAvailabilityWindow && slices.Contains(w.Repositories, state.Selection.Repository) && slices.Contains(w.Executors, state.Selection.Agent) && slices.Contains(w.ReadOnlyExecutors, state.Selection.Agent+"-review") {
+		if time.Since(w.LastSeenAt) < workerAvailabilityWindow && slices.Contains(w.Repositories, state.Selection.Repository) && slices.Contains(w.Executors, state.Selection.Agent) && (slices.Contains(w.ReadOnlyExecutors, state.Selection.Agent+"-review") || ((state.Selection.Agent == "opencode" || state.Selection.Agent == "hermes") && state.Selection.Host == "local")) {
 			worker["connected"] = true
 			worker["name"] = w.Name
 		}
@@ -460,11 +457,14 @@ func sameGitHubRepository(remote, repo string) bool {
 func (o *onboarding) selectAgent(agent, host string) error {
 	o.configureMu.Lock()
 	defer o.configureMu.Unlock()
-	if agent != "codex" && agent != "claude" {
-		return errors.New("select Codex or Claude Code")
+	if agent != "codex" && agent != "claude" && agent != "opencode" && agent != "hermes" {
+		return errors.New("select Codex, Claude Code, OpenCode or Hermes")
 	}
 	if host != "local" && host != "remote" && host != "kubernetes" {
 		return errors.New("select this computer, remote VM or Kubernetes")
+	}
+	if (agent == "opencode" || agent == "hermes") && host != "local" {
+		return errors.New("OpenCode and Hermes are supported on this computer only")
 	}
 	if host == "kubernetes" {
 		definition, err := config.LoadConfig(o.server.definitionPath)
@@ -504,10 +504,17 @@ func (o *onboarding) selectAgent(agent, host string) error {
 	return o.saveLocked()
 }
 func setupExecutors(agent string) map[string]config.Executor {
-	if agent == "claude" {
-		return map[string]config.Executor{"claude-native": {Adapter: "claude-stream", Command: []string{"claude", "--print", "--verbose", "--output-format", "stream-json", "--include-partial-messages", "--dangerously-skip-permissions"}}, "claude": {Command: []string{"claude", "--print", "--verbose", "--output-format", "stream-json", "--dangerously-skip-permissions"}}, "claude-review": {ReadOnly: true, Command: []string{"claude", "--print", "--verbose", "--output-format", "stream-json", "--safe-mode", "--restricted", "--strict-mcp-config", "--permission-mode", "plan", "--tools", "Read,Glob,Grep"}}}
+	if agent == "opencode" || agent == "hermes" {
+		executor := config.Executor{Adapter: "opencode-json", Command: []string{"opencode", "run", "--format", "json"}}
+		if agent == "hermes" {
+			executor = config.Executor{Adapter: "hermes-stream", Command: []string{"hermes", "chat", "--query-file", "-", "--format", "stream-json"}}
+		}
+		return map[string]config.Executor{agent: executor, agent + "-native": executor}
 	}
-	return map[string]config.Executor{"codex-native": {Adapter: "codex-app-server", Command: []string{"codex", "app-server", "--stdio", "-c", "features.multi_agent=true", "-c", `sandbox_mode='danger-full-access'`}}, "codex": {Command: []string{"codex", "exec", "--json", "--sandbox", "danger-full-access", "-"}}, "codex-review": {ReadOnly: true, Command: []string{"codex", "exec", "--json", "--sandbox", "read-only", "-"}}}
+	if agent == "claude" {
+		return map[string]config.Executor{"claude-native": {Adapter: "claude-stream", Command: []string{"claude", "--print", "--verbose", "--output-format", "stream-json", "--include-partial-messages", "--dangerously-skip-permissions"}}, "claude": {Command: []string{"claude", "--model={{machinist.model}}", "--print", "--verbose", "--output-format", "stream-json", "--dangerously-skip-permissions"}}, "claude-review": {ReadOnly: true, Command: []string{"claude", "--model={{machinist.model}}", "--print", "--verbose", "--output-format", "stream-json", "--safe-mode", "--restricted", "--strict-mcp-config", "--permission-mode", "plan", "--tools", "Read,Glob,Grep"}}}
+	}
+	return map[string]config.Executor{"codex-native": {Adapter: "codex-app-server", Command: []string{"codex", "app-server", "--stdio", "-c", "features.multi_agent=true", "-c", `sandbox_mode='danger-full-access'`}}, "codex": {Command: []string{"codex", "exec", "--json", "--model={{machinist.model}}", "--sandbox", "danger-full-access", "-"}}, "codex-review": {ReadOnly: true, Command: []string{"codex", "exec", "--json", "--model={{machinist.model}}", "--sandbox", "read-only", "-"}}}
 }
 func (o *onboarding) workerConfig(selection setupSelection) (config.Worker, error) {
 	o.mu.Lock()
@@ -683,9 +690,12 @@ func (o *onboarding) checkAgent(ctx context.Context, selection setupSelection) s
 				executor.Command[index] = `sandbox_mode='read-only'`
 			}
 		}
-	} else {
+	} else if selection.Agent == "claude" {
 		executor.Adapter = "claude-stream"
+	} else {
+		executor = setupExecutors(selection.Agent)[selection.Agent+"-native"]
 	}
+	executor.Command = slices.DeleteFunc(executor.Command, func(arg string) bool { return arg == "--model={{machinist.model}}" })
 	result, err := runner.Execute(ctx, runner.Options{Command: config.ResolvedCommand{Name: "connection-check", Executor: selection.Agent, Adapter: executor.Adapter, Command: executor.Command, Prompt: "Reply exactly PONG. Do not use tools, read files, or change anything.", Timeout: 45 * time.Second}, Repository: selection.Path, DataDirectory: filepath.Join(o.dir, "checks"), Stdout: io.Discard, Stderr: io.Discard, Environment: env})
 	if err != nil {
 		return setupCheck{"failed", err.Error()}

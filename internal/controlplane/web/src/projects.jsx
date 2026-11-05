@@ -86,7 +86,7 @@ export function ProjectsPage({ status, onRefresh, onStart }) {
     </section>}
     {host === "remote" && repositories.length > 1 && <p className="project-hint project-vm-setup"><a href="/api/v1/onboarding/worker-config?host=remote" download>Download VM setup for all projects</a><span>Stop the existing worker before running this setup on your VM. It contains a private worker connection credential.</span></p>}
     {editingDefaults && repositories.includes(editingDefaults) && <section className="project-default-panel" aria-label="Project defaults" tabIndex={-1} ref={defaultsPanel}>
-      <ProjectDefaults key={editingDefaults} repository={editingDefaults} defaults={status.onboarding?.project_defaults?.[editingDefaults]} host={host} csrfToken={status.csrf_token} onRefresh={onRefresh} onClose={() => { setEditingDefaults(""); defaultsOpener.current?.focus(); }} />
+      <ProjectDefaults key={editingDefaults} repository={editingDefaults} defaults={status.onboarding?.project_defaults?.[editingDefaults]} host={host} agent={status.onboarding?.selection?.agent} csrfToken={status.csrf_token} onRefresh={onRefresh} onClose={() => { setEditingDefaults(""); defaultsOpener.current?.focus(); }} />
     </section>}
     <div className="project-list">{repositories.length ? repositories.map(alias => {
       const name = status.repository_mappings?.[alias];
@@ -97,7 +97,7 @@ export function ProjectsPage({ status, onRefresh, onStart }) {
   </section>;
 }
 
-function ProjectDefaults({ repository, defaults, host, csrfToken, onRefresh, onClose }) {
+function ProjectDefaults({ repository, defaults, host, agent, csrfToken, onRefresh, onClose }) {
  const [recipe, setRecipe] = useState(defaults?.recipe || "");
  const [instructions, setInstructions] = useState(defaults?.instructions || "");
  const [saving, setSaving] = useState(false);
@@ -115,10 +115,10 @@ function ProjectDefaults({ repository, defaults, host, csrfToken, onRefresh, onC
  return <form className="project-defaults" aria-label={`Defaults for ${repository}`} onSubmit={save}>
   <header><div><h2>Project defaults</h2><p>{repository}</p></div><Button type="button" variant="ghost" size="icon" aria-label="Close project defaults" disabled={saving} onClick={onClose}><X className="size-4" /></Button></header>
   <label><span>Default run mode</span><select className="field-control" value={recipe} disabled={saving} onChange={event => setRecipe(event.target.value)}>
-   <option value="">Use existing submission defaults</option><option value="native-v1" disabled={host === "kubernetes"}>Native agents</option><option value="factory">Legacy pipeline</option><option value="single">Single agent</option>
+   <option value="">Use existing submission defaults</option><option value="native-v1" disabled={host === "kubernetes"}>Native agents</option><option value="factory" disabled={["opencode", "hermes"].includes(agent)}>Legacy pipeline</option><option value="single">Single agent</option>
   </select></label>
   <label><span>Default instructions</span><textarea className="field-control" maxLength={2000} value={instructions} readOnly={saving} onChange={event => setInstructions(event.target.value)} /></label>
-  <p className="project-hint">Applies to new jobs submitted through the UI or jobs API. Each job can override these defaults. Agent and model use the shared configuration.</p>
+  <p className="project-hint">Applies to new jobs submitted through the UI or jobs API. Each job can override these defaults. The agent uses the shared configuration. Choose a model when starting a job.</p>
   <Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save defaults"}</Button>
   {message && <p role="status">{message}</p>}
  </form>;

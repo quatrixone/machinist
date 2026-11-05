@@ -79,6 +79,10 @@ func nativeCommand(command config.ResolvedCommand, structuredResult bool) ([]str
 		if command.Model != "" {
 			argv = append(argv, "--model", command.Model)
 		}
+	case "opencode-json", "hermes-stream":
+		if command.Model != "" {
+			argv = append(argv, "--model", command.Model)
+		}
 	case "codex-app-server":
 		// app-server flags remain configurable; model travels in thread/start.
 		found := false
@@ -167,6 +171,9 @@ func (n *nativeStream) line(line []byte) error {
 	var e map[string]json.RawMessage
 	if json.Unmarshal(line, &e) != nil {
 		return nil
+	}
+	if n.adapter == "opencode-json" || n.adapter == "hermes-stream" {
+		return n.localAgentLine(e)
 	}
 	// Raw lines are already spooled by the process pump, including unknown events.
 	str := func(key string) string { var s string; _ = json.Unmarshal(e[key], &s); return s }

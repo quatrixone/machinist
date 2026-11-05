@@ -20,6 +20,7 @@ type factoryLocalStore struct {
 	seedHolds bool
 }
 type localFactoryTask struct {
+	model               string
 	projectInstructions string
 	issue               GitHubIssue
 	repository, alias   string
@@ -117,7 +118,7 @@ func createFactoryRequest(ctx context.Context, tx *sql.Tx, task localFactoryTask
 		if recipe == "native-v1" {
 			role = "primary"
 		}
-		event, _ := json.Marshal(GitHubFactoryEvent{Version: 1, Kind: "created", Role: role, Recipe: recipe, ProjectInstructions: task.projectInstructions})
+		event, _ := json.Marshal(GitHubFactoryEvent{Version: 1, Kind: "created", Role: role, Recipe: recipe, Model: task.model, ProjectInstructions: task.projectInstructions})
 		if _, err = tx.ExecContext(ctx, `INSERT INTO factory_events(task,body,created) VALUES(?,?,?)`, task.issue.HTMLURL, GitHubFactoryMarker+string(event), time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return err
 		}

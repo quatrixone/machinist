@@ -55,7 +55,7 @@ type Executor struct {
 }
 
 func (e Executor) supportsModel() bool {
-	return e.Adapter == "codex-app-server" || e.Adapter == "claude-stream" || slices.ContainsFunc(e.Command, func(argument string) bool { return strings.Contains(argument, modelParameter) })
+	return e.Adapter == "codex-app-server" || e.Adapter == "claude-stream" || e.Adapter == "opencode-json" || e.Adapter == "hermes-stream" || slices.ContainsFunc(e.Command, func(argument string) bool { return strings.Contains(argument, modelParameter) })
 }
 
 type Repository struct {
@@ -531,7 +531,7 @@ func applyWorkerDefaultsWithHostname(worker Worker, getHostname func() (string, 
 	}
 	for name, executor := range worker.Executors {
 		switch executor.Adapter {
-		case "", "process", "claude-stream", "codex-app-server":
+		case "", "process", "claude-stream", "codex-app-server", "opencode-json", "hermes-stream":
 		default:
 			return Worker{}, fmt.Errorf("executor %q has unknown adapter %q", name, executor.Adapter)
 		}

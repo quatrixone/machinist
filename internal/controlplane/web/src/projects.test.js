@@ -66,4 +66,10 @@ test("project defaults stay inline, save with CSRF and start a scoped job", asyn
  assert.equal(requests[0].headers["X-Machinist-CSRF"],"csrf");
  assert.deepEqual(JSON.parse(requests[0].body),{repository:"owner/first",recipe:"single",instructions:"Run tests"});
  assert.equal(refreshes,1);assert.match(document.body.textContent,/Existing jobs are unchanged/);
+ for (const agent of ["opencode", "hermes"]) {
+  await act(()=>root.render(React.createElement(ProjectsPage,{status:{...status,onboarding:{...status.onboarding,selection:{host:"local",agent}}}})));
+  assert.equal(document.querySelector('option[value="factory"]').disabled,true);
+  assert.equal(document.querySelector('option[value="native-v1"]').disabled,false);
+  assert.equal(document.querySelector('option[value="single"]').disabled,false);
+ }
 });

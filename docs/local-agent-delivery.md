@@ -4,6 +4,14 @@ Machinist runs coding agents on your computer, a VM, or a configured Kubernetes
 cluster. Start with the [setup guide](local-factory/README.md), then submit a
 request through **New run** or the API.
 
+In **New run**, set **Model** to override the configured agent model for that
+task, or leave it blank to use the agent default. Use a model identifier supported
+by the selected agent and its signed-in account (OpenCode uses `provider/model`).
+The override is saved with the task and reused for retries and every pipeline
+stage. API submissions accept the same optional `model` field on
+`POST /api/v1/jobs`. A worker must advertise support for the selected model before
+it can claim the task.
+
 ## Connect projects and GitHub
 
 Sign in through the GitHub App and grant access to the repositories you want to
